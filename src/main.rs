@@ -2,11 +2,13 @@ use std::rc::Rc;
 use std::time::Duration;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::future::join_all;
 use rustls::crypto::aws_lc_rs::default_provider;
-use crate::gate::asset::MarketType;
-use crate::gate::{fetch_assets, Gate};
-use crate::gate::sync::sync_time;
-use crate::gate::utils::GateExchangeUtils;
+use crate::gate::auxiliar::asset::MarketType;
+use crate::gate::auxiliar::fetch::fetch_assets;
+use crate::gate::auxiliar::sync::sync_time;
+use crate::gate::auxiliar::utils::GateExchangeUtils;
+use crate::gate::Gate;
 use crate::http::NtexHttpClient;
 
 pub mod gate;
@@ -22,14 +24,35 @@ async fn main() -> std::io::Result<()> {
 
   sync_time(utils.clone()).await.expect("Sync time failed");
 
-  let gate = Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone());
+  let gates = join_all(vec![
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone()),
+      Gate::new("wss://fx-ws.gateio.ws/v4/ws/usdt".to_string(), MarketType::Future, utils.clone())
+    ]
+  ).await;
 
-  let assets = fetch_assets(utils).await.unwrap();
+  let assets = fetch_assets(utils).await.expect("Fetch assets failed");
 
   let mut tasks = FuturesUnordered::new();
 
+  let mut i = 0;
   for (symbol, _) in assets.future {
+    let gate = &gates[i % 16];
     tasks.push(gate.watch(symbol.clone()));
+    i += 1;
   }
 
   while let Some(_) = tasks.next().await {}

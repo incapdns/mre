@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use ratelimit::{Alignment, Ratelimiter};
 use crate::gate::{CONNECT_LIMITER, HTTP_LIMITER};
-use crate::gate::error::ExchangeError;
-use crate::gate::utils::GateExchangeUtils;
+use crate::gate::auxiliar::error::ExchangeError;
+use crate::gate::auxiliar::utils::GateExchangeUtils;
 
 macro_rules! from_headers {
   ($headers:expr) => {

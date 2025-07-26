@@ -1,15 +1,10 @@
 use std::error::Error;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 use downcast_rs::{impl_downcast, Downcast};
 use ntex::http::{Client, Method, Version};
 use ntex::http::client::{ClientResponse, Connector};
-use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvider};
-use rustls::crypto::aws_lc_rs::default_provider;
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{ClientConfig, RootCertStore};
 use thiserror::Error;
 
 // De: src/base/http/generic.rs
@@ -45,83 +40,16 @@ impl Default for NtexHttpClient {
     Self::new()
   }
 }
-#[derive(Debug)]
-pub struct InsecureCertificateVerifier(CryptoProvider);
-
-impl InsecureCertificateVerifier {
-  pub fn new(provider: CryptoProvider) -> Self {
-    Self(provider)
-  }
-}
-
-impl ServerCertVerifier for InsecureCertificateVerifier {
-  fn verify_server_cert(
-    &self,
-    _end_entity: &CertificateDer<'_>,
-    _intermediates: &[CertificateDer<'_>],
-    _server_name: &ServerName<'_>,
-    _ocsp: &[u8],
-    _now: UnixTime,
-  ) -> Result<ServerCertVerified, rustls::Error> {
-    Ok(ServerCertVerified::assertion())
-  }
-
-  fn verify_tls12_signature(
-    &self,
-    message: &[u8],
-    cert: &CertificateDer<'_>,
-    dss: &DigitallySignedStruct,
-  ) -> Result<HandshakeSignatureValid, rustls::Error> {
-    verify_tls12_signature(
-      message,
-      cert,
-      dss,
-      &self.0.signature_verification_algorithms,
-    )
-  }
-
-  fn verify_tls13_signature(
-    &self,
-    message: &[u8],
-    cert: &CertificateDer<'_>,
-    dss: &DigitallySignedStruct,
-  ) -> Result<HandshakeSignatureValid, rustls::Error> {
-    verify_tls13_signature(
-      message,
-      cert,
-      dss,
-      &self.0.signature_verification_algorithms,
-    )
-  }
-
-  fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-    self.0
-      .signature_verification_algorithms
-      .supported_schemes()
-  }
-}
 
 impl NtexHttpClient {
   pub fn new() -> Self {
-    let connector = Connector::default()
-      .timeout(Duration::from_secs(15));
-
-    let protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-
-    let mut config = ClientConfig::builder()
-      .dangerous()
-      .with_custom_certificate_verifier(Arc::new(InsecureCertificateVerifier::new(default_provider())))
-      .with_no_client_auth();
-
-    config.alpn_protocols = protocols;
-
-    let connector = connector
-      .rustls(config)
-      .finish();
-
     Self {
       client: Client::build()
-        .connector(connector)
+        .connector(
+          Connector::default()
+            .timeout(Duration::from_secs(15))
+            .finish(),
+        )
         .finish(),
     }
   }

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ntex = { version = "2.15.0", features = ["compio", "compress", "coo-kie", "cookie", "default", "rustls", "tls-rustls", "url", "url-pkg", "webpki-roots", "ws"] }
+ntex = { version = "2.15.0", features = ["tokio", "compress", "coo-kie", "cookie", "default", "rustls", "tls-rustls", "url", "url-pkg", "webpki-roots", "ws"] }
 rust_decimal = { version = "1.37.2", features = ["macros", "serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.141"
@@ -21,4 +21,6 @@ arc-swap = "1.7.1"
 async-channel = "2.5.0"
 socket2 = "0.5.10"
 num_cpus = "1.17.0"
-compio = { version = "0.15.0", features = ["all"] }
+tokio = { version = "1.47.0", features = ["full"] }
+env_logger = "0.11.8"
+log = "0.4.27"

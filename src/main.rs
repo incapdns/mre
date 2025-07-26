@@ -1,3 +1,5 @@
+use std::env::set_var;
+use std::net;
 use std::rc::Rc;
 use std::time::Duration;
 use futures::stream::FuturesUnordered;
@@ -16,10 +18,21 @@ mod http;
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
+  env_logger::init();
+
+  log::warn!("[root] warn");
+  log::info!("[root] info");
+  log::debug!("[root] debug");
+
   default_provider()
     .install_default()
     .expect("Failed to install default CryptoProvider");
 
+  let res = net::ToSocketAddrs::to_socket_addrs("api.gateio.ws");
+  println!("{:?}", res);
+
+  let res = net::ToSocketAddrs::to_socket_addrs("api.gateio.ws:443");
+  println!("{:?}", res);
   let utils = Rc::new(GateExchangeUtils::new(NtexHttpClient::new()));
 
   sync_time(utils.clone()).await.expect("Sync time failed");

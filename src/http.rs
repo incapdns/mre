@@ -4,7 +4,6 @@ use std::time::Duration;
 use downcast_rs::{impl_downcast, Downcast};
 use ntex::http::{Client, Method, Version};
 use ntex::http::client::{ClientResponse, Connector};
-use rustls::{ClientConfig, RootCertStore};
 use thiserror::Error;
 
 // De: src/base/http/generic.rs
@@ -93,13 +92,16 @@ impl HttpClient for NtexHttpClient {
     let client = self.client.clone();
     Box::pin(async move {
       let method = method.parse::<Method>()?;
+
       let mut req = client
         .request(method, uri)
         .version(Version::HTTP_2)
         .timeout(Duration::from_secs(10));
+
       for (k, v) in &mut headers {
         req = req.header(k.as_ref(), v.as_ref());
       }
+
       if let Some(http_body) = body.take() {
         let mut backup: Option<Box<dyn HttpBody + 'b>> = None;
         if let Some(boxed) = process_downgrade!(init, Vec<u8>, http_body, backup) {

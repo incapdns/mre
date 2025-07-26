@@ -59,11 +59,13 @@ struct FutureDepthSnapshot {
 
 type Init = Rc<RefCell<HashMap<String, Vec<OrderBookUpdate>>>>;
 pub type SharedBook = Rc<RefCell<OrderBook>>;
+pub type HistoryBids = HashSet<Decimal>;
 
 pub struct Gate {
   market: MarketType,
   subscribed: Rc<RefCell<HashMap<String, SharedBook>>>,
-  init_queue: Init,
+  history_bids: Rc<RefCell<HashMap<String, HistoryBids>>>,
+  init: Init,
   sink: WsSink
 }
 
@@ -72,7 +74,6 @@ static ASSETS: LazyLock<Mutex<Assets>> = LazyLock::new(|| Mutex::new(Assets::new
 pub static CONNECT_LIMITER: OnceCell<Arc<Ratelimiter>> = OnceCell::new();
 pub static HTTP_LIMITER: OnceCell<Arc<Ratelimiter>> = OnceCell::new();
 
-type HistoryBids = Rc<RefCell<HashSet<Decimal>>>;
 
 impl Gate {
   pub async fn new(ws_url: String, market: MarketType, utils: Rc<GateExchangeUtils>) -> Self {
@@ -90,6 +91,7 @@ impl Gate {
 
     let subscribed = Rc::new(RefCell::new(HashMap::new()));
     let init_queue = Rc::new(RefCell::new(HashMap::new()));
+    let history_bids = Rc::new(RefCell::new(HashMap::new()));;
 
     let ws_client = ws::WsClient::build(ws_url)
       .connector(connector)
@@ -112,11 +114,11 @@ impl Gate {
     let subscribed_cl = subscribed.clone();
     let utils_cl = utils.clone();
     let market_cl = market.clone();
+    let history_bids_cl = history_bids.clone();
 
     ntex::rt::spawn(async move {
       let mut client_tasks = FuturesUnordered::new();
-
-      let history_bids = HistoryBids::default();
+      let history_bids = history_bids_cl.clone();
 
       loop {
         macros::select! {
@@ -152,8 +154,9 @@ impl Gate {
     Self {
       market,
       subscribed,
-      init_queue,
-      sink
+      init: init_queue,
+      sink,
+      history_bids
     }
   }
 
@@ -174,13 +177,21 @@ impl Gate {
     let book = Rc::new(RefCell::new(OrderBook::default()));
     self.subscribed.borrow_mut().insert(normalized_symbol.clone(), book);
 
+    let history_bids = HistoryBids::new();
+    self.history_bids.borrow_mut().insert(normalized_symbol.clone(), history_bids);
+
+    let init = Vec::with_capacity(1000);
+    self.init.borrow_mut().insert(normalized_symbol.clone(), init);
+
+
+
     Ok(())
   }
 
   async fn handle_message(
     text: String,
     subscribed: Rc<RefCell<HashMap<String, SharedBook>>>,
-    history_bids: HistoryBids,
+    history_bids: Rc<RefCell<HashMap<String, HistoryBids>>>,
     init: Init,
     utils: Rc<GateExchangeUtils>,
     market: MarketType,
@@ -211,7 +222,6 @@ impl Gate {
       }
 
       book.borrow_mut().update_id = 1;
-      init.borrow_mut().entry(symbol.to_string()).or_default();
 
       let snapshot =
         Self::fetch_snapshot(&symbol, utils.clone(), update.first_update_id, market.clone()).await;
@@ -254,12 +264,14 @@ impl Gate {
       book_bm.update_id = snapshot.update_id;
 
       let mut history_bm = history_bids.borrow_mut();
+      let history = history_bm
+        .get_mut(&symbol)?;
 
       for (price, qty) in &book_bm.bids {
         if qty.eq(&Decimal::ZERO) {
-          history_bm.remove(&price.0);
+          history.remove(&price.0);
         } else {
-          history_bm.insert(price.0);
+          history.insert(price.0);
         }
       }
 
@@ -274,9 +286,9 @@ impl Gate {
         book_bm.apply_update(&update, &mut updates);
         for (price, qty) in &update.bids {
           if qty.eq(&Decimal::ZERO) {
-            history_bm.remove(&price);
+            history.remove(&price);
           } else {
-            history_bm.insert(*price);
+            history.insert(*price);
           }
         }
       };
@@ -295,16 +307,19 @@ impl Gate {
       book.borrow_mut().apply_update(&update, &mut vec![]);
 
       let mut history_bm = history_bids.borrow_mut();
+      let history = history_bm
+              .get_mut(&symbol)?;
+
       for (price, qty) in &update.bids {
         if qty.eq(&Decimal::ZERO) {
-          history_bm.remove(&price);
+          history.remove(&price);
         } else {
-          history_bm.insert(*price);
+          history.insert(*price);
         }
       }
 
       for (r_bid, _) in book.borrow().bids.iter() {
-        if history_bm.get(&r_bid.0).is_none() {
+        if history.get(&r_bid.0).is_none() {
           panic!("Error in BID price {:?}", r_bid);
         }
       }

@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::Duration;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rustls::crypto::aws_lc_rs::default_provider;
@@ -10,11 +11,6 @@ use crate::http::NtexHttpClient;
 
 pub mod gate;
 mod http;
-
-async fn reenter(gate: &Gate, symbol: String) -> String {
-  let _ = gate.watch(symbol.clone()).await;
-  symbol
-}
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
@@ -33,12 +29,14 @@ async fn main() -> std::io::Result<()> {
   let mut tasks = FuturesUnordered::new();
 
   for (symbol, _) in assets.future {
-    tasks.push(reenter(&gate, symbol));
+    tasks.push(gate.watch(symbol.clone()));
   }
 
-  while let Some(symbol) = tasks.next().await {
-    tasks.push(reenter(&gate, symbol));
+  while let Some(_) = tasks.next().await {}
+
+  loop {
+    ntex::time::sleep(Duration::from_secs(5)).await;
   }
 
-  return Ok(())
+  Ok(())
 }
